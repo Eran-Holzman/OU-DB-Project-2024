@@ -69,8 +69,8 @@ class DB_handler:
         self.cursor.execute(""" CREATE TABLE IF NOT EXISTS text_handle.word_groups(group_id SERIAL PRIMARY KEY, 
                              group_description TEXT, word_ids INTEGER[]); """)
         self.connection.commit()
-        # self.cursor.execute(" CREATE TABLE text_handle.phrases(phrase_id SERIAL PRIMARY KEY, phrase TEXT )")
-        # self.connection.commit()
+        self.cursor.execute(" CREATE TABLE IF NOT EXISTS text_handle.phrases(phrase_id SERIAL PRIMARY KEY, phrase TEXT )")
+        self.connection.commit()
 
     def create_triggers(self):
     # Create a trigger that checks whether an article is already in the table or not.
@@ -126,6 +126,27 @@ class DB_handler:
                             " BEFORE INSERT ON art_info.reporters "
                             " FOR EACH ROW EXECUTE FUNCTION art_info.check_reporter_exists(); ")
         self.connection.commit()
+        self.cursor.execute("""
+            CREATE OR REPLACE FUNCTION text_handle.check_phrase_exists()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM text_handle.phrases
+                    WHERE phrase = NEW.phrase
+                ) THEN
+                    RAISE EXCEPTION 'Phrase "%s" already exists.', NEW.phrase;
+                ELSE
+                    RETURN NEW;
+                END IF;
+            END;
+            $$ LANGUAGE plpgsql;
+    
+            CREATE OR REPLACE TRIGGER phrase_insert_trigger
+            BEFORE INSERT ON text_handle.phrases
+            FOR EACH ROW EXECUTE FUNCTION text_handle.check_phrase_exists();
+        """)
+        self.connection.commit()
 
     # Getters:
 
@@ -164,5 +185,11 @@ class DB_handler:
                             " WHERE article_title = %s ",
                             (article_title,))
         return self.cursor.fetchall()
+
+    def get_all_article_titles(self):
+        self.cursor.execute(" SELECT article_title FROM art_info.articles ")
+        return self.cursor.fetchall()
+
+
 
 
