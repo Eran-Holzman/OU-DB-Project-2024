@@ -1,3 +1,5 @@
+import streamlit as st
+import pandas as pd
 from DB_handler import DB_handler
 import re
 import ast
@@ -118,12 +120,14 @@ class TextBuilder:
             if tup[2] == 1:
                 final_text += f"{tup[3]}"
             else:
-                final_text += " " + f" {tup[3]}"
+                final_text += f" {tup[3]}"
+
         return article_title, date_of_issue, rep_full_name, final_text
 
     def all_words(self):
         self.db_handler.cursor.execute(" SELECT word "
-                                       " from text_handle.words")
+                                       " from text_handle.words"
+                                       " order by word ")
         self.db_handler.connection.commit()
         return self.db_handler.cursor.fetchall()
 
@@ -132,7 +136,7 @@ class TextBuilder:
         self.db_handler.cursor.execute(" SELECT word "
                                        " from text_handle.words, unnest(occurrences) AS occ "
                                        " WHERE (occ).article_id = %s"
-                                       " order by occ ", (article_id,))
+                                       " order by word ", (article_id,))
         self.db_handler.connection.commit()
         return self.db_handler.cursor.fetchall()
 
@@ -147,8 +151,6 @@ class TextBuilder:
                                        " WHERE (outer_tuple).article_id = %s and word_id = %s",
                                        (article_id,word_id))
         self.db_handler.connection.commit()
-
-        # Build the text array with tuples
         for row in self.db_handler.cursor:
             tup_arr = parse_string_to_tuple(row[0], row[1])
         for tup in tup_arr:
@@ -188,8 +190,6 @@ class TextBuilder:
             res.append(final_context)
         return res
 
-
-    # Search for all the articles that contain a specific word.
     # An index is defined as the position of the word in the article.
     # The position consists of the paragraph number, the line number and the position in the line.
     def build_words_index(self, article_title):
@@ -215,6 +215,80 @@ class TextBuilder:
             index_arr = parse_string_to_tuple_ind(row[1])
             res.append((row[0], index_arr))
         return res
+
+    def handle_indexes(self):
+        article_title = st.selectbox("Please select an article ",
+                                     self.create_article_titles_array())
+        if st.button("View") and article_title:
+            words_index = self.build_words_index(article_title)
+            if len(article_title) != 0 and words_index is None:
+                st.write("Invalid article title")
+            elif words_index:
+                df = pd.DataFrame(words_index, columns=["Word", "Index"])
+                st.subheader(f"The words index in the article '{article_title}': ")
+                st.write("* Please note that the index is a paragraph number, row number and position in the row")
+                st.dataframe(df, hide_index=True, width=1000)
+            elif article_title and words_index is None:
+                st.write("The article is empty")
+            else:
+                st.write("Article not found.")
+            if st.button("Start indexes view from the beginning"):
+                self.handle_indexes()
+
+    def create_article_titles_array(self):
+        articles_tup_arr = self.db_handler.get_all_article_titles()
+        ret = ["Please select"]
+        for article_tup in articles_tup_arr:
+            ret.append(article_tup[0])
+        return ret
+
+    def handle_all_words_in_article(self):
+        article_title = st.selectbox("Please select an article ",
+                                     self.create_article_titles_array())
+        if st.button("View") and article_title:
+            words = self.all_words_in_article(article_title)
+            if words:
+                st.subheader(f"All the words in the article '{article_title}' are: ")
+                for word in words:
+                    col1, col2, col3 = st.columns(3, vertical_alignment="center")
+                    with col1:
+                        st.write(word[0])
+                    with col2:
+                        with st.popover("Show Context", help=f"Click for '{word[0]}' context in the article"):
+                            # st.markdown(self.tb.build_context(article_title, word[0]))
+                            st.markdown(f"the word is '{word[0]}' and article name is '{article_title}'")
+
+            elif article_title and words is None:
+                st.error("The article is empty")
+            else:
+                st.error("Article not found.")
+
+    def handle_all_words(self):
+        words = self.all_words()
+        if words:
+            st.subheader("All the words in the database are: ")
+            for word_tup in words:
+                st.write(word_tup[0])
+            st.write(words)
+        else:
+            st.error("The database has no words yet.")
+
+    def handle_article_view(self):
+        article_title = st.selectbox("Please select an article ",
+                                     self.create_article_titles_array())
+        if st.button("View") and article_title:
+            article = self.build_entire_text(article_title)
+            if article:
+                st.write(f"Title: {article[0]}")
+                st.write(f"Date: {article[1]}")
+                st.write(f"Reporter: {article[2]}")
+                st.write("Content:")
+                final_text = article[3].replace('\n', '  \n')
+                st.write(final_text)
+            else:
+                st.error("Article not found.")
+
+
 
 
 
