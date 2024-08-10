@@ -167,31 +167,10 @@ class Article:
         """
         pass
 
-    #
-    # def __init__(self, title, author, content):
-    #     self.title = title
-    #     self.author = author
-    #     self.content = content
-    #
-    # def load_from_text(self):
-    #     pass
-    #
-    # def load_from_DB(self):
-    #     pass
-    #
-    #
+
     def show(self):
         print(f'{self.title} by {self.author}')
         print(self.content)
 
-    # def find_words_before(self, word, number):
-    #     pass
-    #
-    # def find_words_after(self, word, number):
-    #     pass
-    #
-    # def find_words_wrapping(self, word, number):
-    #     pass
-    #
-    # def find_words_count(self, word, number):
-    #     pass
+
+
