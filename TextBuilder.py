@@ -33,30 +33,6 @@ def parse_string_to_tuple_ind(input_string):
     tup_arr = ast.literal_eval(tuple_strings.replace('{', '[').replace('}', ']'))
     return tup_arr
 
-
-def parse_string_to_tuple_con(word, input_string):
-    res = []
-    tuple_strings = (input_string
-                                    .replace(r'"', '') \
-                                    .replace(r'\\"" \\""', "' '")\
-                                    .replace('\n', '@@@') \
-                                    .replace("\\", "'")) \
-                                    .replace(r'pppuuu&&&', '\',\"') \
-                                    .replace(r'&&&pppuuu', '\'",\'') \
-                                    .replace(r'&&&', '\'"\'') \
-                                    .replace(r'pppuuu', "','") \
-                                    .replace(r'hhhaaa', "'('") \
-                                    .replace(r'hhhbbb', "')'")
-    parsed_tuple = ast.literal_eval(tuple_strings.replace('{', '[').replace('}', ']'))
-    array_of_tuples = list(parsed_tuple)
-    for tup in array_of_tuples:
-        temp_str = tup[3].replace(r'@@@@@@', '\n\n')\
-                         .replace(r'@@@', '\n')\
-                         .replace(r'&&&', '"')
-        final_word = word + temp_str
-        new_tup = tup[:3] + (final_word,)
-        res.append(new_tup)
-    return res
 def parse_string_to_tuple(word, input_string):
     res = []
     tuple_strings = (input_string
