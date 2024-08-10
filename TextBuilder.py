@@ -18,12 +18,8 @@ def parse_array_of_tuples(array_string):
 
 
 def parse_tuple_string(tuple_string):
-    # Remove the parentheses
     tuple_string = tuple_string.strip('()')
-
-    # Split the string by commas
     elements = re.split(r',\s*', tuple_string)
-
     first_three_integers = [int(elements[i].strip()) for i in range(3)]
     last_two_strings = [elements[i].strip() for i in range(3, 5)]
 
@@ -44,7 +40,13 @@ def parse_string_to_tuple_con(word, input_string):
                                     .replace(r'"', '') \
                                     .replace(r'\\"" \\""', "' '")\
                                     .replace('\n', '@@@') \
-                                    .replace("\\", "'"))
+                                    .replace("\\", "'")) \
+                                    .replace(r'pppuuu&&&', '\',\"') \
+                                    .replace(r'&&&pppuuu', '\'",\'') \
+                                    .replace(r'&&&', '\'"\'') \
+                                    .replace(r'pppuuu', "','") \
+                                    .replace(r'hhhaaa', "'('") \
+                                    .replace(r'hhhbbb', "')'")
     parsed_tuple = ast.literal_eval(tuple_strings.replace('{', '[').replace('}', ']'))
     array_of_tuples = list(parsed_tuple)
     for tup in array_of_tuples:
@@ -145,14 +147,22 @@ class TextBuilder:
         lines_arr = []
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         word_id = self.db_handler.get_word_id_from_word(word)
-        self.db_handler.cursor.execute(" SELECT word, unnest(occurrences) "
-                                       " FROM text_handle.words, "
-                                       " LATERAL unnest(occurrences) AS outer_tuple "
-                                       " WHERE (outer_tuple).article_id = %s and word_id = %s",
-                                       (article_id,word_id))
+        # self.db_handler.cursor.execute(" SELECT word, unnest(occurrences) "
+        #                                " FROM text_handle.words, "
+        #                                " LATERAL unnest(occurrences) AS outer_tuple "
+        #                                " WHERE (outer_tuple).article_id = %s and word_id = %s",
+        #                                (article_id,word_id))
+        self.db_handler.cursor.execute( """ with position_aggregation as (
+                                            SELECT word_id, word, outer_tuple
+                                            FROM text_handle.words, 
+                                            LATERAL unnest(occurrences) AS outer_tuple 
+                                            WHERE (outer_tuple).article_id = %s and word_id = %s)
+                                            SELECT word_id, word, (outer_tuple).positions 
+                                            FROM position_aggregation """,
+                                        (article_id, word_id))
         self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
-            tup_arr = parse_string_to_tuple(row[0], row[1])
+            tup_arr = parse_string_to_tuple(row[1], row[2])
         for tup in tup_arr:
             line = (tup[0], tup[1])
             lines_arr.append(line)
@@ -181,12 +191,15 @@ class TextBuilder:
             result = self.db_handler.cursor.fetchall()
             text_arr = []
             for tup in result:
-                tup_arr = parse_string_to_tuple_con(tup[1], tup[2])
+                tup_arr = parse_string_to_tuple(tup[1], tup[2])
                 text_arr.extend(tup_arr)
             sorted_text_arr = sorted(text_arr, key=lambda x: (x[0], x[1], x[2]))
             final_context = ""
             for tup in sorted_text_arr:
-                final_context += f"{tup[3]}"
+                if tup[2] == 1:
+                    final_context += f"{tup[3]}"
+                else:
+                    final_context += f" {tup[3]}"
             res.append(final_context)
         return res
 
@@ -255,7 +268,13 @@ class TextBuilder:
                         st.write(word[0])
                     with col2:
                         with st.popover("Show Context", help=f"Click for '{word[0]}' context in the article"):
-                            # st.markdown(self.tb.build_context(article_title, word[0]))
+                            st.markdown(f"context/s for {word[0]}:")
+                            context_list = self.build_context(article_title, word[0])
+                            i = 0
+                            for context in context_list:
+                                i+=1
+                                st.markdown(f"context {i}:")
+                                st.markdown(f"{context.replace('\n', '  \n')}")
                             st.markdown(f"the word is '{word[0]}' and article name is '{article_title}'")
 
             elif article_title and words is None:
