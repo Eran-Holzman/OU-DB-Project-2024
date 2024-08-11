@@ -28,14 +28,6 @@ def convert_dict_to_array_of_tuples(big_dict):
     return array_of_tuples
 
 
-def replace_quotes(word_occurrence):
-    for i, occurrence in enumerate(word_occurrence):
-        temp_str1 = occurrence[4].replace(r'"', '&&&').replace(r',', 'pppuuu').replace(r'(', 'hhhaaa')
-        temp_str2 = occurrence[3].replace(r'"', '&&&').replace(r',', 'pppuuu').replace(r')', 'hhhbbb')
-        new_occ = (occurrence[0], occurrence[1], occurrence[2], temp_str2, temp_str1)
-        word_occurrence[i] = new_occ
-
-
 class TextLoader:
     def __init__(self):
         self.db_handler = DB_handler()
@@ -84,8 +76,6 @@ class TextLoader:
                                            (word_occurrences[0],))
             self.db_handler.connection.commit()
             word_id = self.db_handler.cursor.fetchall()
-            replace_quotes(word_occurrences[1])
-            # If the word is not in the database, we add it.
             if len(word_id) == 0:
                 self.db_handler.cursor.execute(" INSERT INTO text_handle.words (word, occurrences) VALUES ( "
                                                " %s,  ARRAY[ "
