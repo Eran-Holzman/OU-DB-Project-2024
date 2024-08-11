@@ -51,6 +51,35 @@ class Article:
         self.words: Dict[str, List[Tuple[int, int, int, str, str]]] = {}
         self.tl = TextLoader()
 
+    # def process_content(self):
+    #     paragraphs = [p.strip() for p in re.split(r'\n\s*\n', self.content) if p.strip()]
+    #     for p_index, paragraph in enumerate(paragraphs, start=1):
+    #         lines = paragraph.split('\n')
+    #         for l_index, line in enumerate(lines, start=1):
+    #             is_last_line_in_paragraph = (l_index == len(lines))
+    #             words_in_line = line.split()
+    #             word_position = 0
+    #             for w_index, word in enumerate(words_in_line, start=1):
+    #                 if not is_only_none_alnum(word):
+    #                     word_tuple = split_word(word)
+    #                 else:
+    #                     word_tuple = ('', word, '')
+    #                 is_last_word_in_line = (w_index == len(words_in_line))
+    #                 word_position += 1
+    #                 if is_last_line_in_paragraph and is_last_word_in_line:
+    #                     tup = (p_index, l_index, word_position, word_tuple[2] + '\n\n', word_tuple[0])
+    #                 elif is_last_word_in_line:
+    #                     tup = (p_index, l_index, word_position, word_tuple[2] + '\n', word_tuple[0])
+    #                 else:
+    #                     tup = (p_index, l_index, word_position, word_tuple[2], word_tuple[0])
+    #                 if word_tuple[1] not in self.words:
+    #                     self.words[word_tuple[1]] = []
+    #                 self.words[word_tuple[1]].append(tup)
+    #     reporter_id = self.tl.load_reporter(self.authors)
+    #     np_id = self.tl.load_newspaper(self.newspaper)
+    #     article_id = self.tl.load_article(np_id, self.title, self.date, reporter_id)
+    #     self.tl.load_text(article_id, self.words)
+
     def process_content(self):
         paragraphs = [p.strip() for p in re.split(r'\n\s*\n', self.content) if p.strip()]
         for p_index, paragraph in enumerate(paragraphs, start=1):
@@ -67,11 +96,11 @@ class Article:
                     is_last_word_in_line = (w_index == len(words_in_line))
                     word_position += 1
                     if is_last_line_in_paragraph and is_last_word_in_line:
-                        tup = (p_index, l_index, word_position, word_tuple[2] + '\n\n', word_tuple[0])
+                        tup = (p_index, l_index, word_position, word_tuple[0], word_tuple[2] + '\n\n')
                     elif is_last_word_in_line:
-                        tup = (p_index, l_index, word_position, word_tuple[2] + '\n', word_tuple[0])
+                        tup = (p_index, l_index, word_position, word_tuple[0], word_tuple[2] + '\n')
                     else:
-                        tup = (p_index, l_index, word_position, word_tuple[2], word_tuple[0])
+                        tup = (p_index, l_index, word_position, word_tuple[0], word_tuple[2])
                     if word_tuple[1] not in self.words:
                         self.words[word_tuple[1]] = []
                     self.words[word_tuple[1]].append(tup)
@@ -171,6 +200,5 @@ class Article:
     def show(self):
         print(f'{self.title} by {self.author}')
         print(self.content)
-
 
 
