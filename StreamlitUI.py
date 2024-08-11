@@ -30,7 +30,7 @@ class StreamlitUI:
         st.title("News Article Database")
 
         menu = ["Home", "Add Article", "Search", "View", "Word groups",
-                "Phrases", "Word Statistics", "Print Words Dictionary"]
+                "Phrases", "Word Statistics"]
         choice = st.sidebar.selectbox("Menu", menu)
 
         if choice == "Home":
@@ -127,18 +127,21 @@ class StreamlitUI:
         elif view_type == "All words in article":
             self.tb.handle_all_words_in_article()
         elif view_type == "Index of all words in article":
-            self.tb.handle_indexes()
+            self.tb.handle_indexes('article')
 
     def word_groups(self):
         st.subheader("Word Groups")
         wg_type = st.selectbox("What would you like to do?",
-                               ["Please select", "Create group", "Add word to existing group", "My groups"])
+                               ["Please select", "Create group", "Add word to existing group", "My groups",
+                                "Group index"])
         if wg_type == "Create group":
             self.wg.handle_group_creation()
         elif wg_type == "Add word to existing group":
             self.wg.handle_group_addition()
         elif wg_type == "My groups":
             self.wg.handle_my_groups()
+        elif wg_type == "Group index":
+            self.wg.group_index()
 
     def phrases(self):
         st.subheader("Phrases")
