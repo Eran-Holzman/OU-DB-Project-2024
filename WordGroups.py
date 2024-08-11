@@ -139,3 +139,20 @@ class WordGroup:
                     st.write(word)
             else:
                 st.write("Group is empty.")
+
+    def group_index(self):
+        st.subheader("Group indexes:")
+        group_description = st.selectbox("Please select a group ",
+                                         self.get_all_groups())
+        if group_description != "Please select":
+            group_id = self.get_group_id(group_description)
+            if group_id:
+                words = self.get_group(group_description)
+                if words:
+                    article_title = st.selectbox("Please select an article", self.tb.create_article_titles_array())
+                    if article_title and article_title != "Please select":
+                        self.tb.build_group_words_index(article_title, words)
+                else:
+                    st.write("Group is empty.")
+            else:
+                st.error("Group not found.")
