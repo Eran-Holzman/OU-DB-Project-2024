@@ -1,65 +1,9 @@
 import streamlit as st
 import pandas as pd
 from DB_handler import DB_handler
+from collections import defaultdict
 import re
 import ast
-
-def parse_array_of_tuples(array_string):
-    # Remove the curly braces
-    array_string = array_string.strip('{}')
-    # Regular expression to match tuples
-    tuple_pattern = re.compile(r'\(([^)]+)\)')
-    # Find all tuple strings
-    tuples = tuple_pattern.findall(array_string)
-    parsed_tuples = []
-    for tup in tuples:
-        parsed_tuples.append(parse_tuple_string(tup))
-    return parsed_tuples
-
-
-def parse_tuple_string(tuple_string):
-    tuple_string = tuple_string.strip('()')
-    elements = re.split(r',\s*', tuple_string)
-    first_three_integers = [int(elements[i].strip()) for i in range(3)]
-    last_two_strings = [elements[i].strip() for i in range(3, 5)]
-
-    return tuple(first_three_integers + last_two_strings)
-
-def parse_string_to_tuple_ind(input_string):
-    res = []
-    tuple_strings = (input_string
-                                    .replace(r'"', '') \
-                                    .replace("\\",''))
-    tup_arr = ast.literal_eval(tuple_strings.replace('{', '[').replace('}', ']'))
-    return tup_arr
-
-def parse_string_to_tuple(word, input_string):
-    res = []
-    tuple_strings = (input_string
-                                    .replace(r'\"', '') \
-                                    .replace(r'"', '') \
-                                    .replace("\\", '')\
-                                    .replace('\n', '@@@') \
-                                    # .replace('&&&', "'&&&'") \
-                                    .replace(r'\\, \\', ','))
-    actual_array = parse_array_of_tuples(tuple_strings)
-    for tup in actual_array:
-        temp_str_beg = tup[4].replace(r"&&&", '"') \
-                             .replace(r'hhhaaa', '(') \
-                             .replace(r'pppuuu&&&', ',"') \
-                             .replace(r'&&&pppuuu', '",')
-        temp_str_end = tup[3].replace(r'@@@@@@', '\n\n')\
-                             .replace(r'@@@', '\n')\
-                             .replace(r'pppuuu&&&', ',"')\
-                             .replace(r'&&&pppuuu', '",')\
-                             .replace(r'&&&', '"') \
-                             .replace(r'pppuuu', ',') \
-                             .replace(r'hhhaaa', '(') \
-                             .replace(r'hhhbbb', ')')
-        final_word = temp_str_beg + word + temp_str_end
-        new_tup = tup[:3] + (final_word,)
-        res.append(new_tup)
-    return res
 
 class TextBuilder:
     def __init__(self):
@@ -72,34 +16,39 @@ class TextBuilder:
             return None
         else:
             article_id = art_id_full[0][0]
-        self.db_handler.cursor.execute("""SELECT a.article_title, a.date, r.first_name, r.last_name 
+        self.db_handler.cursor.execute("""SELECT a.date, r.first_name, r.last_name 
                                           FROM art_info.articles a JOIN art_info.reporters r 
                                           ON a.reporter_id = r.reporter_id 
                                           WHERE a.article_id = %s """,
                                          (article_id, ))
         self.db_handler.connection.commit()
-        article_title, date_of_issue, rep_f_name, rep_last_name = self.db_handler.cursor.fetchall()[0]
-        self.db_handler.cursor.execute( """ with position_aggregation as (
-                                            SELECT word_id, word, outer_tuple
-                                            FROM text_handle.words, 
-                                            LATERAL unnest(occurrences) AS outer_tuple 
-                                            WHERE (outer_tuple).article_id = %s )
-                                            SELECT word_id, word, (outer_tuple).positions 
-                                            FROM position_aggregation """,
-                                        (article_id, ))
-        self.db_handler.connection.commit()
+        date_of_issue, rep_f_name, rep_last_name = self.db_handler.cursor.fetchall()[0]
         rep_full_name = rep_f_name + " " + rep_last_name
+        self.db_handler.cursor.execute( """ SELECT 
+                                                w.word,
+                                                pos.paragraph_number,
+                                                pos.line_number,
+                                                pos.position_in_line,
+                                                pos.starting_chars,
+                                                pos.finishing_chars
+                                            FROM 
+                                                text_handle.words w,
+                                                unnest(w.occurrences) as o(article_id, positions),
+                                                unnest(o.positions) as pos(paragraph_number, line_number, 
+                                                position_in_line, starting_chars, finishing_chars)
+                                            WHERE 
+                                                o.article_id = %s
+                                                order by pos.paragraph_number, pos.line_number, pos.position_in_line; 
+                                                """, (article_id, ))
+        self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
-            tup_arr = parse_string_to_tuple(row[1],row[2])
-            text_arr.extend(tup_arr)
-        sorted_text_arr = sorted(text_arr, key=lambda x: (x[0], x[1], x[2]))
+            text_arr.append((row[0], row[1], row[2], row[3], row[4], row[5]))
         final_text = ""
-        for tup in sorted_text_arr:
-            if tup[2] == 1:
-                final_text += f"{tup[3]}"
+        for tup in text_arr:
+            if tup[3] == 1:
+                final_text += f"{tup[4]}" + f"{tup[0]}" + f"{tup[5]}"
             else:
-                final_text += f" {tup[3]}"
-
+                final_text += " " + f"{tup[4]}" + f"{tup[0]}" + f"{tup[5]}"
         return article_title, date_of_issue, rep_full_name, final_text
 
     def all_words(self):
@@ -123,59 +72,50 @@ class TextBuilder:
         lines_arr = []
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         word_id = self.db_handler.get_word_id_from_word(word)
-        # self.db_handler.cursor.execute(" SELECT word, unnest(occurrences) "
-        #                                " FROM text_handle.words, "
-        #                                " LATERAL unnest(occurrences) AS outer_tuple "
-        #                                " WHERE (outer_tuple).article_id = %s and word_id = %s",
-        #                                (article_id,word_id))
-        self.db_handler.cursor.execute( """ with position_aggregation as (
-                                            SELECT word_id, word, outer_tuple
-                                            FROM text_handle.words, 
-                                            LATERAL unnest(occurrences) AS outer_tuple 
-                                            WHERE (outer_tuple).article_id = %s and word_id = %s)
-                                            SELECT word_id, word, (outer_tuple).positions 
-                                            FROM position_aggregation """,
+        self.db_handler.cursor.execute( """ SELECT 
+                                                pos.paragraph_number,
+                                                pos.line_number
+                                            FROM 
+                                                text_handle.words w,
+                                                unnest(w.occurrences) as o(article_id, positions),
+                                                unnest(o.positions) as pos(paragraph_number, line_number, 
+                                                position_in_line, starting_chars, finishing_chars)
+                                            WHERE 
+                                                o.article_id = %s and word_id = %s """,
                                         (article_id, word_id))
         self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
-            tup_arr = parse_string_to_tuple(row[1], row[2])
-        for tup in tup_arr:
-            line = (tup[0], tup[1])
-            lines_arr.append(line)
+            lines_arr.append((row[0], row[1]))
         for line in lines_arr:
             query = """
-                SELECT word_id, word, 
-                       ARRAY(
-                           SELECT pos
-                           FROM unnest((outer_tuple).positions) AS pos
-                           WHERE pos.paragraph_number = %s
-                           AND pos.line_number IN (%s, %s, %s)
-                       ) AS filtered_positions
-                FROM text_handle.words,
-                     LATERAL unnest(occurrences) AS outer_tuple
-                WHERE (outer_tuple).article_id = %s
-                  AND EXISTS (
-                      SELECT 1
-                      FROM unnest((outer_tuple).positions) AS pos
-                      WHERE pos.paragraph_number = %s
-                      AND pos.line_number IN (%s, %s, %s)
-                  )
+                    SELECT 
+                        w.word,
+                        pos.paragraph_number,
+                        pos.line_number,
+                        pos.position_in_line,
+                        pos.starting_chars,
+                        pos.finishing_chars
+                    FROM 
+                        text_handle.words w,
+                        unnest(w.occurrences) as o(article_id, positions),
+                        unnest(o.positions) as pos(paragraph_number, line_number, 
+                        position_in_line, starting_chars, finishing_chars)
+                    WHERE 
+                        o.article_id = %s and pos.paragraph_number = %s and pos.line_number in (%s,%s,%s)
+                        order by pos.paragraph_number, pos.line_number, pos.position_in_line;
             """
-            self.db_handler.cursor.execute(query, (line[0],line[1]-1,line[1],line[1]+1,
-                                                   article_id,line[0],line[1]-1,line[1],line[1]+1))
+            self.db_handler.cursor.execute(query, (article_id,line[0],line[1]-1,line[1],line[1]+1))
             self.db_handler.connection.commit()
             result = self.db_handler.cursor.fetchall()
             text_arr = []
-            for tup in result:
-                tup_arr = parse_string_to_tuple(tup[1], tup[2])
-                text_arr.extend(tup_arr)
-            sorted_text_arr = sorted(text_arr, key=lambda x: (x[0], x[1], x[2]))
+            for row in result:
+                text_arr.append((row[0], row[1], row[2], row[3], row[4], row[5]))
             final_context = ""
-            for tup in sorted_text_arr:
-                if tup[2] == 1:
-                    final_context += f"{tup[3]}"
+            for tup in text_arr:
+                if tup[3] == 1:
+                    final_context += f"{tup[4]}" + f"{tup[0]}" + f"{tup[5]}"
                 else:
-                    final_context += f" {tup[3]}"
+                    final_context += " " + f"{tup[4]}" + f"{tup[0]}" + f"{tup[5]}"
             res.append(final_context)
         return res
 
@@ -187,42 +127,113 @@ class TextBuilder:
             return None
         else:
             article_id = art_id_full[0][0]
-        self.db_handler.cursor.execute( """ SELECT word,
-                                            ARRAY_AGG((pos.paragraph_number, pos.line_number, 
-                                            pos.position_in_line)) AS positions
-                                            FROM text_handle.words,
-                                            LATERAL unnest(occurrences) AS occ(article_id, positions),
-                                            LATERAL unnest(occ.positions) AS pos(paragraph_number, line_number, 
-                                            position_in_line, finishing_chars, starting_chars)
-                                            WHERE occ.article_id = %s
-                                            GROUP BY word
-                                            ORDER BY word """,
+        self.db_handler.cursor.execute( """ SELECT 
+                                                w.word,
+                                                pos.paragraph_number,
+                                                pos.line_number,
+                                                pos.position_in_line
+                                            FROM 
+                                                text_handle.words w,
+                                                unnest(w.occurrences) as o(article_id, positions),
+                                                unnest(o.positions) as pos(paragraph_number, line_number, 
+                                                position_in_line, starting_chars, finishing_chars)
+                                            WHERE 
+                                                o.article_id = %s
+                                                order by w.word, pos.paragraph_number, 
+                                                pos.line_number, pos.position_in_line; """,
                                         (article_id, ))
         self.db_handler.connection.commit()
-        res = []
-        for row in self.db_handler.cursor:
-            index_arr = parse_string_to_tuple_ind(row[1])
-            res.append((row[0], index_arr))
-        return res
+        words_index = self.db_handler.cursor.fetchall()
 
-    def handle_indexes(self):
+        occurrences_dict = defaultdict(list)
+        for row in words_index:
+            word, paragraph_number, line_number, position_in_line = row
+            occurrence = (paragraph_number, line_number, position_in_line)
+            occurrences_dict[word].append(occurrence)
+        index_arr = []
+        for word, occurrences in occurrences_dict.items():
+            index_arr.append((word, occurrences))
+
+        return index_arr
+
+    def handle_indexes(self, flag):
         article_title = st.selectbox("Please select an article ",
                                      self.create_article_titles_array())
         if st.button("View") and article_title:
             words_index = self.build_words_index(article_title)
-            if len(article_title) != 0 and words_index is None:
-                st.write("Invalid article title")
-            elif words_index:
-                df = pd.DataFrame(words_index, columns=["Word", "Index"])
-                st.subheader(f"The words index in the article '{article_title}': ")
-                st.write("* Please note that the index is a paragraph number, row number and position in the row")
-                st.dataframe(df, hide_index=True, width=1000)
-            elif article_title and words_index is None:
-                st.write("The article is empty")
-            else:
-                st.write("Article not found.")
-            if st.button("Start indexes view from the beginning"):
-                self.handle_indexes()
+            if flag == 'article':
+                if len(article_title) != 0 and words_index is None:
+                    st.write("Invalid article title")
+                elif words_index:
+                    df = pd.DataFrame(words_index, columns=["Word", "Index"])
+                    st.subheader(f"The words index in the article '{article_title}': ")
+                    st.write("* Please note that the index is a paragraph number, row number and position in the row")
+                    st.dataframe(df, hide_index=True, width=1000)
+                elif article_title and words_index is None:
+                    st.write("The article is empty")
+                else:
+                    st.write("Article not found.")
+                if st.button("Start indexes view from the beginning"):
+                    self.handle_indexes()
+            elif flag == 'group':
+                group_words_index = self.build_group_words_index(article_title)
+                if len(article_title) != 0 and words_index is None:
+                    st.write("Invalid article title")
+                elif words_index:
+                    df = pd.DataFrame(group_words_index, columns=["Word", "Index"])
+                    st.subheader(f"The words index in the article '{article_title}': ")
+                    st.write("* Please note that the index is a paragraph number, row number and position in the row")
+                    st.dataframe(df, hide_index=True, width=1000)
+                elif article_title and words_index is None:
+                    st.write("The article is empty")
+                else:
+                    st.write("Article not found.")
+                if st.button("Start indexes view from the beginning"):
+                    self.handle_indexes()
+
+    def build_group_words_index(self, article_title, words):
+        article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
+        query = """
+            SELECT 
+                w.word,
+                pos.paragraph_number,
+                pos.line_number,
+                pos.position_in_line
+            FROM 
+                text_handle.words w,
+                unnest(w.occurrences) as o(article_id, positions),
+                unnest(o.positions) as pos(paragraph_number, line_number, position_in_line, starting_chars, finishing_chars)
+            WHERE 
+                o.article_id = %s
+                AND w.word = ANY(%s)
+                order by pos.paragraph_number, pos.line_number, pos.position_in_line;
+        """
+        self.db_handler.cursor.execute(query, (article_id, words))
+        self.db_handler.connection.commit()
+        group_words_index = self.db_handler.cursor.fetchall()
+        st.subheader(f"The words index for this group in the article '{article_title}': ")
+        st.write("* Please note that the index is a paragraph number, row number and position in the row")
+        for index in group_words_index:
+            col1, col2, col3 = st.columns(3, vertical_alignment="center")
+            with col1:
+                st.write(' ')
+            with col2:
+                st.write((index[1]), (index[2]), (index[3]))
+            with col3:
+                st.write(' ')
+        if st.button("View index per word"):
+            occurrences_dict = defaultdict(list)
+            for row in group_words_index:
+                word, paragraph_number, line_number, position_in_line = row
+                occurrence = (paragraph_number, line_number, position_in_line)
+                occurrences_dict[word].append(occurrence)
+            index_arr = []
+            for word, occurrences in occurrences_dict.items():
+                index_arr.append((word, occurrences))
+            df = pd.DataFrame(index_arr, columns=["Word", "Index"])
+            st.subheader(f"The words index for this group in the article '{article_title}': ")
+            st.write("* Please note that the index is a paragraph number, row number and position in the row")
+            st.dataframe(df, hide_index=True, width=1000)
 
     def create_article_titles_array(self):
         articles_tup_arr = self.db_handler.get_all_article_titles()
