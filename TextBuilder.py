@@ -1,3 +1,9 @@
+############################################################################################################
+#              This module is responsible for building text from the database, including                   #
+#                     building the entire text, building index list and context                            #
+#              The methids in this class implement the 4th, 5th, 6th and 11th                              #
+#                               requirements of the assignment                                             #
+############################################################################################################
 import streamlit as st
 import pandas as pd
 from DB_handler import DB_handler
@@ -72,16 +78,24 @@ class TextBuilder:
         lines_arr = []
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         word_id = self.db_handler.get_word_id_from_word(word)
+        # self.db_handler.cursor.execute( """ SELECT
+        #                                         pos.paragraph_number,
+        #                                         pos.line_number
+        #                                     FROM
+        #                                         text_handle.words w,
+        #                                         unnest(w.occurrences) as o(article_id, positions),
+        #                                         unnest(o.positions) as pos(paragraph_number, line_number,
+        #                                         position_in_line, starting_chars, finishing_chars)
+        #                                     WHERE
+        #                                         o.article_id = %s and word_id = %s """,
+        #                                 (article_id, word_id))
         self.db_handler.cursor.execute( """ SELECT 
-                                                pos.paragraph_number,
-                                                pos.line_number
+                                                paragraph_number,
+                                                line_number
                                             FROM 
-                                                text_handle.words w,
-                                                unnest(w.occurrences) as o(article_id, positions),
-                                                unnest(o.positions) as pos(paragraph_number, line_number, 
-                                                position_in_line, starting_chars, finishing_chars)
+                                                text_handle.words_positions
                                             WHERE 
-                                                o.article_id = %s and word_id = %s """,
+                                                article_id = %s and word_id = %s """,
                                         (article_id, word_id))
         self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
@@ -89,20 +103,17 @@ class TextBuilder:
         for line in lines_arr:
             query = """
                     SELECT 
-                        w.word,
-                        pos.paragraph_number,
-                        pos.line_number,
-                        pos.position_in_line,
-                        pos.starting_chars,
-                        pos.finishing_chars
+                        word,
+                        paragraph_number,
+                        line_number,
+                        position_in_line,
+                        starting_chars,
+                        finishing_chars
                     FROM 
-                        text_handle.words w,
-                        unnest(w.occurrences) as o(article_id, positions),
-                        unnest(o.positions) as pos(paragraph_number, line_number, 
-                        position_in_line, starting_chars, finishing_chars)
+                        text_handle.words_positions
                     WHERE 
-                        o.article_id = %s and pos.paragraph_number = %s and pos.line_number in (%s,%s,%s)
-                        order by pos.paragraph_number, pos.line_number, pos.position_in_line;
+                        article_id = %s and paragraph_number = %s and line_number in (%s,%s,%s)
+                        order by paragraph_number, line_number, position_in_line;
             """
             self.db_handler.cursor.execute(query, (article_id,line[0],line[1]-1,line[1],line[1]+1))
             self.db_handler.connection.commit()
@@ -128,19 +139,16 @@ class TextBuilder:
         else:
             article_id = art_id_full[0][0]
         self.db_handler.cursor.execute( """ SELECT 
-                                                w.word,
-                                                pos.paragraph_number,
-                                                pos.line_number,
-                                                pos.position_in_line
+                                                word,
+                                                paragraph_number,
+                                                line_number,
+                                                position_in_line
                                             FROM 
-                                                text_handle.words w,
-                                                unnest(w.occurrences) as o(article_id, positions),
-                                                unnest(o.positions) as pos(paragraph_number, line_number, 
-                                                position_in_line, starting_chars, finishing_chars)
+                                                text_handle.words_positions
                                             WHERE 
-                                                o.article_id = %s
-                                                order by w.word, pos.paragraph_number, 
-                                                pos.line_number, pos.position_in_line; """,
+                                                article_id = %s
+                                                order by word, paragraph_number, 
+                                                line_number, position_in_line; """,
                                         (article_id, ))
         self.db_handler.connection.commit()
         words_index = self.db_handler.cursor.fetchall()
@@ -195,18 +203,16 @@ class TextBuilder:
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         query = """
             SELECT 
-                w.word,
-                pos.paragraph_number,
-                pos.line_number,
-                pos.position_in_line
+                word,
+                paragraph_number,
+                line_number,
+                position_in_line
             FROM 
-                text_handle.words w,
-                unnest(w.occurrences) as o(article_id, positions),
-                unnest(o.positions) as pos(paragraph_number, line_number, position_in_line, starting_chars, finishing_chars)
+                text_handle.words_positions
             WHERE 
-                o.article_id = %s
-                AND w.word = ANY(%s)
-                order by pos.paragraph_number, pos.line_number, pos.position_in_line;
+                article_id = %s
+                AND word = ANY(%s)
+                order by paragraph_number, line_number, position_in_line;
         """
         self.db_handler.cursor.execute(query, (article_id, words))
         self.db_handler.connection.commit()
