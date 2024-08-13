@@ -11,6 +11,7 @@ class Main:
         self.database.create_types()
         self.database.create_tables()
         self.database.create_triggers()
+        self.database.create_view()
 
     def run(self):
         self.ui.run()
