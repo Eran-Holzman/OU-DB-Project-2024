@@ -74,24 +74,24 @@ class DB_handler:
 
     def create_triggers(self):
     # Create a trigger that checks whether an article is already in the table or not.
-        self.cursor.execute(" CREATE OR REPLACE FUNCTION art_info.check_article_exists() "
-                            " RETURNS TRIGGER AS $$ "
-                            " BEGIN "
-                                " IF EXISTS (SELECT a.article_id "
-                                "            FROM art_info.articles a JOIN art_info.newspapers n "
-                                "            ON a.np_id = n.np_id"
-                                "            WHERE a.article_title = NEW.article_title AND a.date = NEW.date) THEN"
-                                "   RAISE NOTICE 'The article % exists already.', NEW.article_title; "
-                                "   RETURN NULL; "
-                                "ELSE "
-                                "   RETURN NEW; "
-                                "END IF; "
-                            " END; "
-                            " $$ LANGUAGE plpgsql; "
-                            " CREATE OR REPLACE TRIGGER article_insert_update_trigger "
-                            " BEFORE INSERT ON art_info.articles "
-                            "FOR EACH ROW EXECUTE FUNCTION art_info.check_article_exists(); ")
-        self.connection.commit()
+    #     self.cursor.execute(" CREATE OR REPLACE FUNCTION art_info.check_article_exists() "
+    #                         " RETURNS TRIGGER AS $$ "
+    #                         " BEGIN "
+    #                             " IF EXISTS (SELECT a.article_id "
+    #                             "            FROM art_info.articles a JOIN art_info.newspapers n "
+    #                             "            ON a.np_id = n.np_id"
+    #                             "            WHERE a.article_title = NEW.article_title AND a.date = NEW.date) THEN "
+    #                             "   RAISE NOTICE 'The article % exists already.'; "
+    #                             "   RETURN NULL; "
+    #                             "ELSE "
+    #                             "   RETURN NEW; "
+    #                             "END IF; "
+    #                         " END; "
+    #                         " $$ LANGUAGE plpgsql; "
+    #                         " CREATE OR REPLACE TRIGGER article_insert_update_trigger "
+    #                         " BEFORE INSERT ON art_info.articles "
+    #                         " FOR EACH ROW EXECUTE FUNCTION art_info.check_article_exists(); ")
+    #     self.connection.commit()
     # Create a trigger that checks if a newspaper already exists to prevent duplications.
         self.cursor.execute(" CREATE OR REPLACE FUNCTION art_info.check_np_exists() "
                             " RETURNS TRIGGER AS $$ "
@@ -146,6 +146,26 @@ class DB_handler:
             BEFORE INSERT ON text_handle.phrases
             FOR EACH ROW EXECUTE FUNCTION text_handle.check_phrase_exists();
         """)
+        self.connection.commit()
+
+    def create_view(self):
+        self.cursor.execute("""
+                            CREATE OR REPLACE VIEW text_handle.words_positions AS 
+                                SELECT 
+                                    w.word_id as word_id,
+                                    w.word as word,
+                                    o.article_id as article_id,
+                                    pos.paragraph_number as paragraph_number,
+                                    pos.line_number as line_number,
+                                    pos.position_in_line as position_in_line,
+                                    pos.starting_chars as starting_chars,
+                                    pos.finishing_chars as finishing_chars
+                                FROM 
+                                    text_handle.words w,
+                                    unnest(w.occurrences) as o(article_id, positions),
+                                    unnest(o.positions) as pos(paragraph_number, line_number, 
+                                    position_in_line, starting_chars, finishing_chars);                     
+                                    """)
         self.connection.commit()
 
     # Getters:
