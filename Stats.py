@@ -1,174 +1,304 @@
 ############################################################################################################
-#              This module is responsible for searches in the database according                           #
-#              to key elements provided by the user                                                        #
-#              The functions in this class implement the 3rd requirement of the assignment        #
+#              This module is responsible for calculating db statistics                                    #
+#              The methods in this class implement the last requirements in the assignment                 #
 ############################################################################################################
-import streamlit as st
 from DB_handler import DB_handler
-import pandas as pd
-from datetime import *
 
 
-def parse_date(date_str_inp):
-    try:
-        # Try to parse the date string using the specified format
-        ret = datetime.strptime(date_str_inp, '%B %d, %Y')
-        return ret
-    except ValueError:
-        # If a ValueError is raised, the date string does not match the format
-        return None
-
-def parse_tuples_string(string_representation):
-    # Remove outer curly braces and split the string into individual tuple strings
-    string_representation = string_representation.strip('{}')
-    tuple_strings = string_representation.split('","')
-
-    # Clean up each tuple string
-    tuples_list = []
-    for tuple_str in tuple_strings:
-        cleaned_tuple_str = tuple_str.strip('"').strip('()')
-        tuple_elements = cleaned_tuple_str.split(',')
-        tuple_int = tuple(map(int, tuple_elements))
-        tuples_list.append(tuple_int)
-
-    return tuples_list
-
-
-class SearchWizard:
+class Stats:
     def __init__(self):
         self.db_handler = DB_handler()
 
-    ## The first 2 requirements are taken care of by the class db_handler
-
-    ## The following cluster of functions is supposed to take care of requirement number 3
-    #  in the project's requirements. The cluster ends in the next ##
-
-    # Search for all the articles written by an reporter whose name was provided by the user.
-    # The loop takes care of the case where there can be multiple reporters with the same name.
-    # In that case, we fetch the articles that were written by all of them.
-    def search_reporter_articles(self, reporter_full_name):
-        if len(reporter_full_name) == 0:
-            return None
-        else:
-            reporter_ids = self.db_handler.get_reporter_id_from_name(reporter_full_name)
-            for reporter_id_tuple in reporter_ids:
-                reporter_id = reporter_id_tuple[0]
-                self.db_handler.cursor.execute(" SELECT a.article_title, n.np_name, a.date "
-                                               " FROM art_info.articles a JOIN art_info.newspapers n "
-                                               " ON a.np_id = n.np_id "
-                                               " WHERE a.reporter_id = %s ", (reporter_id,))
-                self.db_handler.connection.commit()
-            return self.db_handler.cursor.fetchall()
-
-    # Search for all the articles in a specific newspaper.
-    # The assumption is that there are no 2 magazines with the same name.
-    def search_np_articles(self, np_name):
-        np_id_ret = self.db_handler.get_np_id_from_name(np_name)
-        if len(np_id_ret) == 0:
-            return None
-        else:
-            np_id = np_id_ret[0][0]
-            self.db_handler.cursor.execute(" SELECT article_title, date "
-                                           " FROM art_info.articles WHERE np_id = %s", (np_id,))
-            self.db_handler.connection.commit()
-            return self.db_handler.cursor.fetchall()
-
-    # Search for all the articles that were published a specific date
-    def search_articles_date(self, date):
-        self.db_handler.cursor.execute(" SELECT a.article_title, n.np_name "
-                                       " FROM art_info.articles a JOIN art_info.newspapers n "
-                                       " ON a.np_id = n.np_id "
-                                       " WHERE a.date = %s", (date,))
+    # Returns a table with 2 columns, the word and the length of word.
+    # This applies to all words in the database.
+    def num_of_chars_per_word(self):
+        self.db_handler.cursor.execute("""SELECT word, char_length(word) as word_length 
+                                          FROM text_handle.words
+                                          ORDER BY word_length""")
         self.db_handler.connection.commit()
         return self.db_handler.cursor.fetchall()
 
-    # Search for all the articles that contain a specific word.
-    def search_articles_word(self, word):
-        if len(word) == 0:
-            return None
-        else:
-            word_id = self.db_handler.get_word_id_from_word(word)
-            self.db_handler.cursor.execute(" SELECT a.article_title, n.np_name, a.date "
-                                           " FROM art_info.articles a JOIN art_info.newspapers n "
-                                           " ON a.np_id = n.np_id "
-                                           " WHERE a.article_id IN"
-                                           " (SELECT (unnest(occurrences)).article_id AS article_id "
-                                           " FROM text_handle.words "
-                                           " WHERE word_id = %s)", (word_id,))
+    # Returns the average number of characters per word in the database.
+    def avg_num_of_chars_per_word(self):
+        self.db_handler.cursor.execute("SELECT ROUND(AVG(char_length(word)),2) "
+                                       "FROM text_handle.words")
+        self.db_handler.connection.commit()
+        return self.db_handler.cursor.fetchall()[0][0]
+
+    # Returns a table with 2 columns, the word and the length of word.
+    # This applies to all words in the article.
+    def num_of_chars_per_word_in_article(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT 
+                                                w.word, 
+                                                char_length(w.word) as word_length
+                                            FROM 
+                                                text_handle.words w,
+                                                unnest(w.occurrences) as o(article_id, positions)
+                                            WHERE 
+                                                o.article_id = %s  
+                                            """, (article_id,))
             self.db_handler.connection.commit()
             return self.db_handler.cursor.fetchall()
 
-    def search_word_at_position(self, article_title, paragraph_number, line_number, position_in_line):
-        article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
-        query = """
-            SELECT word
-            FROM words,
-                 LATERAL unnest(occurrences) AS occ(article_id, positions),
-                 LATERAL unnest(occ.positions) AS pos(paragraph_number, line_number, position_in_line, finishing_chars)
-            WHERE occ.article_id = %s
-              AND pos.paragraph_number = %s
-              AND pos.line_number = %s
-              AND pos.position_in_line = %s;
-        """
-        self.db_handler.cursor.execute(query, (article_id, paragraph_number, line_number, position_in_line))
+    # Returns the average number of characters per word in the article.
+    def avg_num_of_chars_per_word_in_article(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT ROUND(AVG(char_length(w.word)),2)
+                                            FROM 
+                                                text_handle.words w,
+                                                unnest(w.occurrences) as o(article_id, positions)
+                                            WHERE 
+                                                o.article_id = %s  
+                                            """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()[0][0]
+
+    # Returns the total number of characters for EACH line in the article.
+    # This INCLUDES spaces.
+    def num_of_characters_in_line(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT 
+                                                paragraph_number,
+                                                line_number,
+                                                SUM(char_length(word)) + SUM(char_length(starting_chars)) +SUM(char_length(finishing_chars)) + 
+                                                MAX(position_in_line) -2 AS total_characters_in_line
+                                            FROM 
+                                                text_handle.words_positions
+                                            WHERE article_id = %s
+                                            GROUP BY 
+                                                paragraph_number, line_number
+                                            ORDER BY        
+                                                paragraph_number, line_number
+                                            """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the average number of characters for EACH line in the article.
+    def avg_of_characters_in_line(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT ROUND(AVG(total_characters_in_line),2) AS avg_chars_in_line
+                                            FROM (SELECT 
+                                                        paragraph_number,
+                                                        line_number,
+                                                        SUM(char_length(word)) + SUM(char_length(starting_chars)) +SUM(char_length(finishing_chars)) + 
+                                                        MAX(position_in_line) -2 AS total_characters_in_line
+                                                    FROM 
+                                                        text_handle.words_positions
+                                                    WHERE article_id = %s
+                                                    GROUP BY 
+                                                        paragraph_number, line_number) AS chars_in_line
+                                            """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()[0][0]
+
+    # Returns the total number of characters in a paragraph
+    def num_of_chars_in_paragraph(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT 
+                                                paragraph_number,
+                                                SUM(char_length(word)) + SUM(char_length(starting_chars)) + SUM(char_length(finishing_chars)) + 
+                                                COUNT(word) - (COUNT(DISTINCT line_number) + 2) AS total_characters_in_paragraph
+                                            FROM 
+                                                text_handle.words_positions
+                                            WHERE article_id = %s
+                                            GROUP BY 
+                                                paragraph_number
+                                            """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the average number of characters in a paragraph
+    def avg_chars_in_paragraph(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT ROUND(AVG(total_characters_in_paragraph),2) AS avg_char_in_paragraph
+                                            FROM(  SELECT 
+                                                        paragraph_number,
+                                                        SUM(char_length(word)) + SUM(char_length(starting_chars)) + SUM(char_length(finishing_chars)) + 
+                                                        COUNT(word) - (COUNT(DISTINCT line_number) + 2)
+                                                     AS total_characters_in_paragraph
+                                                    FROM 
+                                                        text_handle.words_positions
+                                                    WHERE article_id = %s
+                                                    GROUP BY 
+                                                        paragraph_number) AS total_chars_per_paragraph
+                                            """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()[0][0]
+
+    # Returns the total number of characters in the article
+    def num_of_chars_in_article(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""
+                                            SELECT SUM(total_characters_in_paragraph) + 
+                                                   (count(*)-1)*2 AS total_chars_in_Article
+                                            FROM(SELECT SUM(char_length(word)) + SUM(char_length(starting_chars)) + 
+                                                        SUM(char_length(finishing_chars)) + COUNT(word) - 
+                                                        (COUNT(DISTINCT line_number) + 2) AS total_characters_in_paragraph
+                                                    FROM 
+                                                        text_handle.words_positions
+                                                    WHERE article_id = %s
+                                                    GROUP BY paragraph_number) AS total_chars_per_paragraph
+                                                                                        """, (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()[0][0]
+
+    # Returns the number of characters in the entire database(Of all the articles)
+    def num_of_chars_in_db(self):
+        self.db_handler.cursor.execute("""
+                                        SELECT SUM(total_chhars_per_article)
+                                        FROM(
+                                        SELECT SUM(total_characters_in_paragraph) + (MAX(total_paragraphs)-1) *
+                                         2 AS total_chhars_per_article
+                                        FROM(
+                                            SELECT article_id, SUM(char_length(word)) + 
+                                            SUM(char_length(starting_chars)) + SUM(char_length(finishing_chars)) + 
+                                            COUNT(word) - (COUNT(DISTINCT line_number) + 2) AS total_characters_in_paragraph, 
+                                            COUNT(paragraph_number) over (partition by article_id) as total_paragraphs
+                                            FROM 
+                                                text_handle.words_positions
+                                            GROUP BY article_id, paragraph_number) AS total_in_Article
+                                        GROUP BY article_id
+                                        )""")
         self.db_handler.connection.commit()
-        res = self.db_handler.cursor.fetchone()
-        if res:
-            return res[0]
-        else:
-            return None
+        return self.db_handler.cursor.fetchall()
+
+    # Returns the number of characters in the entire database(Of all the articles)
+    def avg_chars_in_db(self):
+        self.db_handler.cursor.execute("""
+                                        SELECT ROUND(AVG(total_chhars_per_article),2)
+                                        FROM(
+                                        SELECT SUM(total_characters_in_paragraph) + (MAX(total_paragraphs)-1) 
+                                        * 2 AS total_chhars_per_article
+                                        FROM(
+                                            SELECT article_id, SUM(char_length(word)) + 
+                                                               SUM(char_length(starting_chars)) + 
+                                                               SUM(char_length(finishing_chars)) + 
+                                                               COUNT(word) - (COUNT(DISTINCT line_number) + 2) 
+                                                               AS total_characters_in_paragraph, 
+                                                               COUNT(paragraph_number) over 
+                                                               (partition by article_id) as total_paragraphs
+                                                    FROM 
+                                                        text_handle.words_positions
+                                                    GROUP BY article_id, paragraph_number) AS total_in_Article
+                                        GROUP BY article_id)""")
+        self.db_handler.connection.commit()
+        return self.db_handler.cursor.fetchall()
+
+    # Returns the total number of words in the db)
+    def num_of_words_in_db(self):
+        self.db_handler.cursor.execute("""SELECT COUNT(word_id)
+                                          FROM text_handle.words""")
+        self.db_handler.connection.commit()
+        return self.db_handler.cursor.fetchall()
+
+    # Returns the total number of words in the article
+    def num_of_words_in_article(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""SELECT COUNT(word)
+                                              FROM text_handle.words_positions
+                                              WHERE article_id = %s""", (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the total number of words in the paragraph
+    def num_of_words_in_paragraph(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""  SELECT COUNT(word)
+                                                FROM text_handle.words_positions
+                                                WHERE article_id = %s
+                                                GROUP BY paragraph_number
+                                                ORDER BY paragraph_number""", (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the average number of words in the paragraph
+    def avg_words_in_paragraph(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""  SELECT ROUND(AVG(num_of_words_per_par), 2)
+                                                FROM (SELECT COUNT(word) AS num_of_words_per_par
+                                                FROM text_handle.words_positions
+                                                WHERE article_id = %s
+                                                GROUP BY paragraph_number)""", (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the total number of words in the line
+    def num_of_words_in_line(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""  SELECT paragraph_number, line_number, COUNT(word) AS num_of_words_in_line
+                                                FROM text_handle.words_positions
+                                                WHERE article_id = %s
+                                                GROUP BY paragraph_number, line_number
+                                                ORDER BY paragraph_number, line_number""", (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns the average number of words in the line
+    def avg_words_in_line(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""  SELECT ROUND(AVG(num_of_words_in_line), 2) as avg_words_per_line
+                                                FROM(   SELECT paragraph_number, line_number, 
+                                                        COUNT(word) AS num_of_words_in_line
+                                                        FROM text_handle.words_positions
+                                                        WHERE article_id = %s
+                                                        GROUP BY paragraph_number, line_number) AS num_words_per_line""",
+                                           (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
+
+    # Returns a frequency list of the words in the entire database(Meaning all the articles)
+    def frequency_list_db(self):
+        self.db_handler.cursor.execute("""  SELECT ROW_NUMBER() OVER 
+                                            (ORDER BY word) AS row_number, word, COUNT(word) AS frequency 
+                                            FROM text_handle.words_positions
+                                            GROUP BY word""")
+        self.db_handler.connection.commit()
+        return self.db_handler.cursor.fetchall()
+
+    # Returns a frequency list of the words in the article
+    def frequency_list_article(self, article_title):
+        article_id_full = self.db_handler.get_article_id_from_title(article_title)
+        if article_id_full:
+            article_id = article_id_full[0][0]
+            self.db_handler.cursor.execute("""  SELECT ROW_NUMBER() OVER (ORDER BY word) AS row_number, word, 
+                                                        COUNT(word) AS frequency 
+                                                FROM text_handle.words_positions
+                                                WHERE article_id = %s
+                                                GROUP BY word""",
+                                           (article_id,))
+            self.db_handler.connection.commit()
+            return self.db_handler.cursor.fetchall()
 
 
 
-    ## End of the cluster of functions for requirement number 3
-
-    ## The following cluster of functions is supposed to take care of requirement number 4
-    #  in the project's requirements. The cluster ends in the next ##
-    # def
-    ## End of the cluster of functions for requirement number 4
-    def handle_search_reporter_articles(self):
-        reporter_name = st.text_input("Please enter a reporter's name: ")
-        articles_of_reporter = self.search_reporter_articles(reporter_name)
-        if articles_of_reporter is not None and len(articles_of_reporter) != 0:
-            df = pd.DataFrame(articles_of_reporter, columns=["Article Title", "Newspaper", "Date"])
-            st.subheader(f"Articles written by {reporter_name}: ")
-            st.dataframe(df, hide_index=True)
-        elif articles_of_reporter is not None and len(articles_of_reporter) == 0:
-            st.error("No articles found.")
-
-    def handle_search_newspaper_articles(self):
-        newspaper_name = st.text_input("Please enter a newspaper's name: ")
-        articles_of_newspaper = self.search_np_articles(newspaper_name)
-        if articles_of_newspaper is not None and len(articles_of_newspaper) != 0:
-            df = pd.DataFrame(articles_of_newspaper, columns=["Article Title", "Date"])
-            st.subheader(f"Articles in {newspaper_name}: ")
-            st.dataframe(df, hide_index=True)
-        elif articles_of_newspaper is not None and len(articles_of_newspaper) == 0:
-            st.error("No articles found.")
-        elif articles_of_newspaper is None and len(newspaper_name) != 0:
-            st.error("Invalid newspaper")
-
-    def handle_search_date_articles(self):
-        date_str = st.text_input("Please enter a date (e.g. January 1, 2022): ")
-        if len(date_str) != 0:
-            p_date = parse_date(date_str)
-            if p_date is not None:
-                articles_of_date = self.search_articles_date(p_date)
-                if articles_of_date is not None and len(articles_of_date) != 0:
-                    df = pd.DataFrame(articles_of_date, columns=["Article Title", "Newspaper"])
-                    st.subheader(f"Articles published on {date_str}: ")
-                    st.dataframe(df, hide_index=True)
-                elif articles_of_date is not None and len(articles_of_date) == 0:
-                    st.error("No articles found.")
-            else:
-                st.write("Invalid date format. Please enter a date in the format 'Month day, year'.")
-
-    def handle_search_word_articles(self):
-        word = st.text_input("Please enter a word: ")
-        articles_of_word = self.search_articles_word(word)
-        if articles_of_word is not None and len(articles_of_word) != 0:
-            df = pd.DataFrame(articles_of_word, columns=["Article Title", "Newspaper", "Date"])
-            st.subheader(f"Articles containing the word '{word}': ")
-            st.dataframe(df, hide_index=True)
-        elif articles_of_word is not None and len(articles_of_word) == 0:
-            st.error("No articles found.")
