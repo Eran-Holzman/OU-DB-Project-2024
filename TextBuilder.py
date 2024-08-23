@@ -4,18 +4,45 @@
 #              The methids in this class implement the 4th, 5th, 6th and 11th                              #
 #                               requirements of the assignment                                             #
 ############################################################################################################
+"""
+This module is responsible for building text from the database, including
+building the entire text, building index lists, and context.
+It implements the 4th, 5th, 6th, and 11th requirements of the assignment.
+
+The TextBuilder class provides methods for text reconstruction, word indexing,
+and context retrieval from the database.
+"""
+
 import streamlit as st
 import pandas as pd
-from DB_handler import DB_handler
+from db_handler import *
 from collections import defaultdict
 import re
 import ast
 
 class TextBuilder:
+    """
+    A class for building and manipulating text data from the database.
+
+    This class provides methods for reconstructing full articles, retrieving word lists,
+    building word indexes, and generating context for specific words in articles.
+    """
     def __init__(self):
+        """Initialize the TextBuilder with a database handler."""
         self.db_handler = DB_handler()
 
     def build_entire_text(self, article_title):
+        """
+        Reconstruct the entire text of an article from the database.
+
+        Args:
+            article_title (str): The title of the article to reconstruct.
+
+        Returns:
+            Optional[Tuple[str, Any, str, str]]: A tuple containing the article title,
+            date of issue, reporter's full name, and the full text of the article.
+            Returns None if the article is not found.
+       """
         text_arr = []
         art_id_full = self.db_handler.get_article_id_from_title(article_title)
         if len(art_id_full) == 0:
@@ -58,6 +85,12 @@ class TextBuilder:
         return article_title, date_of_issue, rep_full_name, final_text
 
     def all_words(self):
+        """
+        Retrieve all words from the database.
+
+        Returns:
+            List[Tuple[str]]: A list of tuples, each containing a single word.
+        """
         self.db_handler.cursor.execute(" SELECT word "
                                        " from text_handle.words"
                                        " order by word ")
@@ -65,6 +98,15 @@ class TextBuilder:
         return self.db_handler.cursor.fetchall()
 
     def all_words_in_article(self, article_title):
+        """
+        Retrieve all words used in a specific article.
+
+        Args:
+            article_title (str): The title of the article.
+
+        Returns:
+            List[Tuple[str]]: A list of tuples, each containing a single word used in the article.
+        """
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         self.db_handler.cursor.execute(" SELECT word "
                                        " from text_handle.words, unnest(occurrences) AS occ "
@@ -74,6 +116,16 @@ class TextBuilder:
         return self.db_handler.cursor.fetchall()
 
     def build_context(self, article_title, word):
+        """
+        Build the context for a specific word in an article.
+
+        Args:
+            article_title (str): The title of the article.
+            word (str): The word to find context for.
+
+        Returns:
+            List[str]: A list of context strings for each occurrence of the word.
+        """
         res =[]
         lines_arr = []
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
@@ -133,6 +185,17 @@ class TextBuilder:
     # An index is defined as the position of the word in the article.
     # The position consists of the paragraph number, the line number and the position in the line.
     def build_words_index(self, article_title):
+        """
+        Build an index of all words in an article, including their positions.
+
+        Args:
+            article_title (str): The title of the article.
+
+        Returns:
+            Optional[List[Tuple[str, List[Tuple[int, int, int]]]]]: A list of tuples, each containing
+            a word and a list of its positions (paragraph, line, position in line).
+            Returns None if the article is not found.
+        """
         art_id_full = self.db_handler.get_article_id_from_title(article_title)
         if len(art_id_full) == 0:
             return None
@@ -165,6 +228,12 @@ class TextBuilder:
         return index_arr
 
     def handle_indexes(self, flag):
+        """
+        Handle the display of word indexes for articles or groups in the Streamlit UI.
+
+        Args:
+            flag (str): 'article' for article indexes, 'group' for group indexes.
+        """
         article_title = st.selectbox("Please select an article ",
                                      self.create_article_titles_array())
         if st.button("View") and article_title:
@@ -200,6 +269,17 @@ class TextBuilder:
                     self.handle_indexes()
 
     def build_group_words_index(self, article_title, words):
+        """
+        Build an index of words from a specific group in an article.
+
+        Args:
+              article_title (str): The title of the article.
+              words (List[str]): The list of words to index.
+
+        Returns:
+              List[Tuple[str, int, int, int]]: A list of tuples, each containing
+               a word and its position (paragraph, line, position in line).
+        """
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         query = """
             SELECT 
@@ -242,6 +322,12 @@ class TextBuilder:
             st.dataframe(df, hide_index=True, width=1000)
 
     def create_article_titles_array(self):
+        """
+        Create an array of all article titles in the database.
+
+        Returns:
+             List[str]: A list of article titles, with "Please select" as the first option.
+        """
         articles_tup_arr = self.db_handler.get_all_article_titles()
         ret = ["Please select"]
         for article_tup in articles_tup_arr:
@@ -249,6 +335,10 @@ class TextBuilder:
         return ret
 
     def handle_all_words_in_article(self):
+        """
+        Handle the display of all words in an article in the Streamlit UI,
+        including context for each word.
+        """
         article_title = st.selectbox("Please select an article ",
                                      self.create_article_titles_array())
         if st.button("View") and article_title:
@@ -263,11 +353,16 @@ class TextBuilder:
                         with st.popover("Show Context", help=f"Click for '{word[0]}' context in the article"):
                             st.markdown(f"context/s for {word[0]}:")
                             context_list = self.build_context(article_title, word[0])
-                            i = 0
-                            for context in context_list:
-                                i+=1
+                            for i, context in enumerate(context_list, 1):
                                 st.markdown(f"context {i}:")
-                                st.markdown(f"{context.replace('\n', '  \n')}")
+                                # Highlight the word:
+                                highlighted_context = re.sub(
+                                    r'\b' + re.escape(word[0]) + r'\b',
+                                    f"**{word[0]}**",
+                                    context,
+                                    flags=re.IGNORECASE
+                                )
+                                st.markdown(highlighted_context.replace('\n', '  \n'))
                             st.markdown(f"the word is '{word[0]}' and article name is '{article_title}'")
 
             elif article_title and words is None:
@@ -276,6 +371,9 @@ class TextBuilder:
                 st.error("Article not found.")
 
     def handle_all_words(self):
+        """
+        Handle the display of all words in the database in the Streamlit UI.
+        """
         words = self.all_words()
         if words:
             st.subheader("All the words in the database are: ")
@@ -286,6 +384,9 @@ class TextBuilder:
             st.error("The database has no words yet.")
 
     def handle_article_view(self):
+        """
+        Handle the display of a full article in the Streamlit UI.
+        """
         article_title = st.selectbox("Please select an article ",
                                      self.create_article_titles_array())
         if st.button("View") and article_title:
@@ -299,7 +400,6 @@ class TextBuilder:
                 st.write(final_text)
             else:
                 st.error("Article not found.")
-
 
 
 
