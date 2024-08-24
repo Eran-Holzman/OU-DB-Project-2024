@@ -4,11 +4,8 @@ It provides a graphical interface for various functionalities including article 
 searching, viewing, word group operations, phrase handling, and statistical analysis.
 """
 
-
-
 import streamlit as st
-
-from db_handler import DB_handler
+from db_handler import *
 from article import *
 from search_wizard import *
 from word_group import *
@@ -16,6 +13,7 @@ from phrases import *
 from collections import Counter
 import plotly.express as px
 from stats import Stats
+from pandas import *
 
 
 def count_sentences(text):
@@ -28,18 +26,11 @@ def count_sentences(text):
     Returns:
         int: The number of sentences in the text.
     """
-    # pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])\s*$'
-    pattern = r'[.]' # Split by period
+    pattern = r'[.]'
     sentences = re.split(pattern, text)
-    print("+++++++++++++++++++++++++++++++")
-    print(text)
-    print("------------------------")
-    print(sentences)
-    print("+++++++++++++++++++++++++++++++")
-
-    # Filter out empty strings
     sentences = [s.strip() for s in sentences if s.strip()]
     return len(sentences)
+
 
 class StreamlitUI:
     """
@@ -48,14 +39,12 @@ class StreamlitUI:
     This class provides methods for different functionalities of the application,
     including adding articles, searching, viewing, managing word groups, and analyzing statistics.
     """
-    def __init__(self, database: DB_handler):
+
+    def __init__(self):
         """
         Initialize the StreamlitUI with necessary components.
-
-        Args:
-            database (DB_handler): An instance of the database handler.
         """
-        self.database = DB_handler()
+        self.database = DBHandler()
         self.sw = SearchWizard()
         self.tb = TextBuilder()
         self.wg = WordGroup()
@@ -92,6 +81,10 @@ class StreamlitUI:
         """Display the home page of the application."""
         st.write("Welcome to the News Article Database!")
         st.write("Use the sidebar to navigate through different functions.")
+        st.subheader("My articles")
+        all_articles = self.database.get_all_articles()
+        df = pd.DataFrame(all_articles, columns=["", "Newspaper", "Article", "Date"])
+        st.dataframe(df, hide_index=True, width=1000)
 
     def add_article(self):
         """Handle the functionality for adding a new article to the database."""
@@ -205,7 +198,6 @@ class StreamlitUI:
         elif choice == "manual phrase search":
             self.ph.manual_phrase_search()
 
-
     def word_statistics(self):
         """Handle the word statistics functionality, providing various statistics about words in articles."""
         st.subheader("Word Statistics")
@@ -246,8 +238,7 @@ class StreamlitUI:
                     return
                 st.write("Statistics for all articles:")
 
-                db_handler = DB_handler()
-
+                db_handler = DBHandler()
 
                 # Database-wide statistics
                 char_count = stats.num_of_chars_in_db()[0][0]
@@ -270,7 +261,6 @@ class StreamlitUI:
                 st.write(f"Average characters per line: {avg_chars_per_line:.2f}")
             if avg_chars_per_paragraph:
                 st.write(f"Average characters per paragraph: {avg_chars_per_paragraph:.2f}")
-            # st.write(f"Average characters per page: {char_count / page_count:.2f}") #חושב שלא רלוונטי כי תמיד מס העמודים =1
             st.write("----------------------")
 
             # Word statistics
