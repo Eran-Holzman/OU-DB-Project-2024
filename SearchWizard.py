@@ -1,8 +1,3 @@
-############################################################################################################
-#              This module is responsible for searches in the database according                           #
-#              to key elements provided by the user                                                        #
-#              The functions in this class implement the 3rd requirement of the assignment        #
-############################################################################################################
 """
 This module is responsible for searches in the database according to key elements provided by the user.
 It implements the 3rd requirement of the assignment.
