@@ -1,9 +1,3 @@
-############################################################################################################
-#              This module is responsible for building text from the database, including                   #
-#                     building the entire text, building index list and context                            #
-#              The methids in this class implement the 4th, 5th, 6th and 11th                              #
-#                               requirements of the assignment                                             #
-############################################################################################################
 """
 This module is responsible for building text from the database, including
 building the entire text, building index lists, and context.
@@ -18,7 +12,7 @@ import pandas as pd
 from db_handler import *
 from collections import defaultdict
 import re
-import ast
+
 
 class TextBuilder:
     """
@@ -27,9 +21,10 @@ class TextBuilder:
     This class provides methods for reconstructing full articles, retrieving word lists,
     building word indexes, and generating context for specific words in articles.
     """
+
     def __init__(self):
         """Initialize the TextBuilder with a database handler."""
-        self.db_handler = DB_handler()
+        self.db_handler = DBHandler()
 
     def build_entire_text(self, article_title):
         """
@@ -53,11 +48,11 @@ class TextBuilder:
                                           FROM art_info.articles a JOIN art_info.reporters r 
                                           ON a.reporter_id = r.reporter_id 
                                           WHERE a.article_id = %s """,
-                                         (article_id, ))
+                                       (article_id,))
         self.db_handler.connection.commit()
         date_of_issue, rep_f_name, rep_last_name = self.db_handler.cursor.fetchall()[0]
         rep_full_name = rep_f_name + " " + rep_last_name
-        self.db_handler.cursor.execute( """ SELECT 
+        self.db_handler.cursor.execute(""" SELECT 
                                                 w.word,
                                                 pos.paragraph_number,
                                                 pos.line_number,
@@ -72,7 +67,7 @@ class TextBuilder:
                                             WHERE 
                                                 o.article_id = %s
                                                 order by pos.paragraph_number, pos.line_number, pos.position_in_line; 
-                                                """, (article_id, ))
+                                                """, (article_id,))
         self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
             text_arr.append((row[0], row[1], row[2], row[3], row[4], row[5]))
@@ -126,29 +121,18 @@ class TextBuilder:
         Returns:
             List[str]: A list of context strings for each occurrence of the word.
         """
-        res =[]
+        res = []
         lines_arr = []
         article_id = self.db_handler.get_article_id_from_title(article_title)[0][0]
         word_id = self.db_handler.get_word_id_from_word(word)
-        # self.db_handler.cursor.execute( """ SELECT
-        #                                         pos.paragraph_number,
-        #                                         pos.line_number
-        #                                     FROM
-        #                                         text_handle.words w,
-        #                                         unnest(w.occurrences) as o(article_id, positions),
-        #                                         unnest(o.positions) as pos(paragraph_number, line_number,
-        #                                         position_in_line, starting_chars, finishing_chars)
-        #                                     WHERE
-        #                                         o.article_id = %s and word_id = %s """,
-        #                                 (article_id, word_id))
-        self.db_handler.cursor.execute( """ SELECT 
+        self.db_handler.cursor.execute(""" SELECT 
                                                 paragraph_number,
                                                 line_number
                                             FROM 
                                                 text_handle.words_positions
                                             WHERE 
                                                 article_id = %s and word_id = %s """,
-                                        (article_id, word_id))
+                                       (article_id, word_id))
         self.db_handler.connection.commit()
         for row in self.db_handler.cursor:
             lines_arr.append((row[0], row[1]))
@@ -167,7 +151,7 @@ class TextBuilder:
                         article_id = %s and paragraph_number = %s and line_number in (%s,%s,%s)
                         order by paragraph_number, line_number, position_in_line;
             """
-            self.db_handler.cursor.execute(query, (article_id,line[0],line[1]-1,line[1],line[1]+1))
+            self.db_handler.cursor.execute(query, (article_id, line[0], line[1] - 1, line[1], line[1] + 1))
             self.db_handler.connection.commit()
             result = self.db_handler.cursor.fetchall()
             text_arr = []
@@ -201,7 +185,7 @@ class TextBuilder:
             return None
         else:
             article_id = art_id_full[0][0]
-        self.db_handler.cursor.execute( """ SELECT 
+        self.db_handler.cursor.execute(""" SELECT 
                                                 word,
                                                 paragraph_number,
                                                 line_number,
@@ -212,7 +196,7 @@ class TextBuilder:
                                                 article_id = %s
                                                 order by word, paragraph_number, 
                                                 line_number, position_in_line; """,
-                                        (article_id, ))
+                                       (article_id,))
         self.db_handler.connection.commit()
         words_index = self.db_handler.cursor.fetchall()
 
@@ -251,7 +235,7 @@ class TextBuilder:
                 else:
                     st.write("Article not found.")
                 if st.button("Start indexes view from the beginning"):
-                    self.handle_indexes()
+                    self.handle_indexes('article')
             elif flag == 'group':
                 group_words_index = self.build_group_words_index(article_title)
                 if len(article_title) != 0 and words_index is None:
@@ -266,7 +250,7 @@ class TextBuilder:
                 else:
                     st.write("Article not found.")
                 if st.button("Start indexes view from the beginning"):
-                    self.handle_indexes()
+                    self.handle_indexes('group')
 
     def build_group_words_index(self, article_title, words):
         """
@@ -400,19 +384,3 @@ class TextBuilder:
                 st.write(final_text)
             else:
                 st.error("Article not found.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
