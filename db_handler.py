@@ -16,22 +16,15 @@ def parse_name(full_name):
     Returns:
         Tuple[str, str]: A tuple containing the first name and last name.
     """
-    # Split the full name by spaces
     parts = full_name.split()
-
-    # Handle cases with no spaces (single name)
     if len(parts) == 1:
         return parts[0], ''
-
-    # Handle cases with more than one space (more than two names)
     first_name = parts[0]
     last_name = ' '.join(parts[1:])
-
     return first_name, last_name
 
 
-
-class DB_handler:
+class DBHandler:
     """
     Handles database operations for the article processing system.
 
@@ -86,10 +79,6 @@ class DB_handler:
                          """)
         self.connection.commit()
 
-        # Function to create all the required tables:
-
-    # Magazines, Volumes, Articles, Reporters,
-    # As part of the creation of the articles table, a new type is created to store the article's pages
     def create_tables(self):
         """Create all required tables in the database."""
         self.cursor.execute(" CREATE TABLE IF NOT EXISTS art_info.Newspapers(np_id UUID PRIMARY KEY, np_name TEXT) ")
@@ -268,6 +257,7 @@ class DB_handler:
                             " FROM art_info.reporters "
                             " WHERE LOWER(first_name)=LOWER(%s) AND LOWER(last_name) = lower(%s) ",
                             (first_name, last_name))
+        self.connection.commit()
         return self.cursor.fetchall()
 
     # Get np_id from np_name
@@ -286,6 +276,7 @@ class DB_handler:
                             " FROM art_info.Newspapers "
                             " WHERE np_name = %s ",
                             (np_name,))
+        self.connection.commit()
         return self.cursor.fetchall()
 
     def get_word_id_from_word(self, word):
@@ -302,6 +293,7 @@ class DB_handler:
                             " FROM text_handle.words "
                             " WHERE word = %s ",
                             (word,))
+        self.connection.commit()
         res = self.cursor.fetchall()
         if len(res) == 0:
             return -1
@@ -322,6 +314,7 @@ class DB_handler:
                             " FROM art_info.articles "
                             " WHERE article_title = %s ",
                             (article_title,))
+        self.connection.commit()
         return self.cursor.fetchall()
 
     def get_all_article_titles(self):
@@ -332,10 +325,9 @@ class DB_handler:
             List[Tuple[str]]: A list of tuples, each containing an article title.
         """
         self.cursor.execute(" SELECT article_title FROM art_info.articles ")
+        self.connection.commit()
         return self.cursor.fetchall()
-# ................................................................................
 
-# ADDED BY ME:
     def get_total_articles(self):
         """
         Get the total number of articles in the database.
@@ -344,5 +336,20 @@ class DB_handler:
             int: The total number of articles.
         """
         self.cursor.execute("SELECT COUNT(*) FROM art_info.articles")
+        self.connection.commit()
         return self.cursor.fetchone()[0]
 
+    def get_all_articles(self):
+        """
+        Get all articles from the database.
+
+        Returns:
+            List[Tuple[Any, ...]]: A list of tuples containing articles.
+        """
+        self.cursor.execute(""" SELECT ROW_NUMBER() OVER (ORDER BY a.article_title) AS row_number, 
+                                        n.np_name, a.article_title, a.date 
+                                FROM art_info.articles a JOIN art_info.newspapers n
+                                ON a.np_id = n.np_id
+                                 ORDER BY row_number, n.np_name, a.date""")
+        self.connection.commit()
+        return self.cursor.fetchall()
