@@ -1,72 +1,132 @@
+"""
+This module handles phrase-related operations for the article processing system.
+It provides functionality for defining, searching, and managing phrases within articles.
+"""
+
 import re
 
 import pandas as pd
 from text_highlighter import text_highlighter
 from annotated_text import annotated_text
-from DB_handler import *
-from TextBuilder import TextBuilder
+from db_handler import *
+from text_builder import TextBuilder
 import streamlit as st
 
 
 def search_phrase_in_text(phrase, text):
+    """
+    Search for occurrences of a phrase in a given text.
+
+    Args:
+        phrase (str): The phrase to search for.
+        text (str): The text to search in.
+
+    Returns:
+        list: A list of tuples containing the start and end positions of each occurrence.
+    """
     matches = re.finditer(re.escape(phrase), text)
     res = []
-
-    # Iterate over matches and print the start and end positions
     for match in matches:
         start = match.start()
-        end = match.end()  # end is the position right after the last character of the substring
+        end = match.end()
         res.append((start, end))
     return res
 
 
 class Phrases:
+    """
+    Handles phrase-related operations including definition, searching, and UI interactions.
+
+    This class provides methods for defining new phrases, searching for phrases in articles,
+    and managing the UI for phrase-related operations.
+    """
     def __init__(self):
-        self.db_handler = DB_handler()
+        """Initialize the Phrases class with database handler and text builder."""
+        self.db_handler = DBHandler()
         self.tb = TextBuilder()
 
     def define_phrase(self, phrase):
+        """
+        Define a new phrase in the database.
+
+        Args:
+           phrase (str): The phrase to be defined.
+        """
         self.db_handler.cursor.execute(" INSERT INTO text_handle.phrases (phrase) VALUES (%s) ", (phrase,))
         self.db_handler.connection.commit()
 
     def get_all_phrases(self):
+        """
+        Retrieve all defined phrases from the database.
+
+        Returns:
+            list: A list of tuples containing all defined phrases.
+        """
         self.db_handler.cursor.execute(" SELECT phrase FROM text_handle.phrases ")
         self.db_handler.connection.commit()
         phrases = self.db_handler.cursor.fetchall()
         return phrases
 
     def is_phrase_defined(self, phrase):
+        """
+        Check if a phrase is already defined in the database.
+
+        Args:
+            phrase (str): The phrase to check.
+
+        Returns:
+            bool: True if the phrase is defined, False otherwise.
+        """
         phrases = self.get_all_phrases()
         for ph in phrases:
             if phrase == ph[0]:
                 return True
 
     def create_phrase_list(self):
+        """
+        Create a numbered list of all defined phrases.
+
+        Returns:
+            list: A list of tuples containing phrase numbers and phrases.
+        """
         phrases_tup_arr = self.get_all_phrases()
         ret = []
         i = 0
         for phrase_tup in phrases_tup_arr:
             i += 1
             ret.append((i, phrase_tup[0]))
-        print(ret)
         return ret
 
     def manual_phrase_definition(self):
+        """
+        Handle the UI for manual phrase definition.
+
+        This method allows users to define new phrases and view existing ones.
+        """
         phrase = st.text_input("Enter phrase")
         if st.button("Save phrase"):
             if phrase:
                 try:
                     self.define_phrase(phrase)
                     st.success(f"Phrase '{phrase}' defined successfully.")
+                    st.subheader("My phrases: ")
+                    df = pd.DataFrame(self.create_phrase_list(), columns=["", "phrase"])
+                    st.dataframe(df, hide_index=True)
                 except Exception as e:
-                    st.error("Error while defining the phrase. It is possible that it is already defined")
-            st.subheader("My phrases: ")
-            df = pd.DataFrame(self.create_phrase_list(), columns=["", "phrase"])
-            st.dataframe(df, hide_index=True)
+                    st.error("""Error while defining the phrase. One of the following could be the reason:  \n
+1. The phrase is already defined.  \n
+2. The phrase has non-ascii characters.  \n
+3. The phrase is longer than 100 characters.""")
             if st.button("Start a new manual phrase definition"):
                 self.manual_phrase_definition()
 
     def phrases_in_text(self):
+        """
+        Handle the UI for searching phrases in an article.
+
+        This method allows users to select an article, highlight phrases,
+        and search for their occurrences in the article.
+        """
         article_title = st.selectbox("Please select an article", self.tb.create_article_titles_array())
         if article_title and article_title != "Please select":
             st.divider()
@@ -88,7 +148,6 @@ class Phrases:
             result = text_highlighter(
                 text=article[3].replace('\n', '  \n'),
                 labels=[("define", "yellow"), ("search", "blue")],
-                # Optionally you can specify pre-existing annotations:
                 annotations=[],
             )
             if st.button("Search"):
@@ -99,13 +158,8 @@ class Phrases:
                     except Exception as e:
                         st.error("Error while defining the phrase. It is possible that it is already defined")
                 try:
-                    # i = 0
                     for annotation in result:
                         res = [annotation]
-                        # if i > 0:
-                        #     st.error("Error: Multiple phrases - Please search one phrase at a time")
-                        #     break
-                        # self.define_phrase(annotation['text'])
                         for appearance in search_phrase_in_text(annotation['text'], article[3].replace('\n', '  \n')):
                             start, end = appearance
                             if start != annotation["start"] and end != annotation["end"]:
@@ -115,9 +169,7 @@ class Phrases:
                                 res.append(new_annotation)
                         result2 = text_highlighter(
                             text=article[3].replace('\n', '  \n'),
-                            labels=[("define", "yellow"), ("search", "blue")],
-                            # Optionally you can specify pre-existing annotations:
-                            annotations=res,
+                            labels=[("define", "yellow"), ("search", "blue")],                            annotations=res,
                         )
                         break
                     if st.button("Start a new search in article"):
@@ -126,6 +178,12 @@ class Phrases:
                     st.error("Error while searching the phrase.")
 
     def manual_phrase_search(self):
+        """
+        Handle the UI for manual phrase searching in an article.
+
+        This method allows users to select an article, choose a predefined phrase,
+        and search for its occurrences in the article.
+        """
         article_title = st.selectbox("Please select an article to search the phrase in",
                                      self.tb.create_article_titles_array())
         if article_title and article_title != "Please select":
@@ -156,10 +214,8 @@ class Phrases:
                         result2 = text_highlighter(
                             text=article[3].replace('\n', '  \n'),
                             labels=[("searched word", "blue")],
-                            # Optionally you can specify pre-existing annotations:
                             annotations=result,
                         )
                         if st.button("Start a new search in article"):
                             self.manual_phrase_search()
-
 
