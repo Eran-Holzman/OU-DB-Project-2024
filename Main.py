@@ -1,12 +1,35 @@
-from DB_handler import *
-from StreamlitUI import StreamlitUI
+from db_handler import *
+from streamlitUI import StreamlitUI
+
 
 class Main:
+    """
+     Main class that orchestrates the application's components.
+
+     This class initializes the database handler and the Streamlit UI,
+     and provides methods to set up the database and run the application.
+
+     Attributes:
+         database (DB_handler): An instance of the database handler.
+         ui (StreamlitUI): An instance of the Streamlit user interface.
+     """
+
     def __init__(self):
-        self.database = DB_handler()
-        self.ui = StreamlitUI(self.database)
+        """
+           Initialize the Main class.
+
+           Creates instances of the DB_handler and StreamlitUI classes.
+           """
+        self.database = DBHandler()
+        self.ui = StreamlitUI()
 
     def init_db(self):
+        """
+        Initialize the database.
+
+        This method sets up the database by creating necessary schemas,
+        custom types, tables, triggers, and views.
+        """
         self.database.create_schemas()
         self.database.create_types()
         self.database.create_tables()
@@ -14,8 +37,12 @@ class Main:
         self.database.create_view()
 
     def run(self):
-        self.ui.run()
+        """
+        Run the application.
 
+        This method starts the Streamlit user interface.
+        """
+        self.ui.run()
 
 
 if __name__ == "__main__":
