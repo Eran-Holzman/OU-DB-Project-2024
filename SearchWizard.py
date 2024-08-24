@@ -39,14 +39,7 @@ class SearchWizard:
         """Initialize the SearchWizard with a database handler."""
         self.db_handler = DBHandler()
 
-    ## The first 2 requirements are taken care of by the class db_handler
 
-    ## The following cluster of functions is supposed to take care of requirement number 3
-    #  in the project's requirements. The cluster ends in the next ##
-
-    # Search for all the articles written by an reporter whose name was provided by the user.
-    # The loop takes care of the case where there can be multiple reporters with the same name.
-    # In that case, we fetch the articles that were written by all of them.
     def search_reporter_articles(self, reporter_full_name):
         """
         Search for all articles written by a reporter.
@@ -171,14 +164,19 @@ class SearchWizard:
             return None
 
 
-    ## End of the cluster of functions for requirement number 3
-
-    ## The following cluster of functions is supposed to take care of requirement number 4
-    #  in the project's requirements. The cluster ends in the next ##
-    # def
-    ## End of the cluster of functions for requirement number 4
     def handle_search_reporter_articles(self):
-        """Handle the Streamlit UI for searching articles by reporter."""
+        """
+        Args:
+        self: The instance of the class containing this method.
+
+        Returns:
+        None
+
+        Side Effects:
+        - Displays a text input field for the reporter's name.
+        - If articles are found, displays a dataframe with the article titles, newspapers, and dates.
+        - If no articles are found, displays an error message.
+        """
         reporter_name = st.text_input("Please enter a reporter's name: ")
         articles_of_reporter = self.search_reporter_articles(reporter_name)
         if articles_of_reporter is not None and len(articles_of_reporter) != 0:
@@ -189,7 +187,19 @@ class SearchWizard:
             st.error("No articles found.")
 
     def handle_search_newspaper_articles(self):
-        """Handle the Streamlit UI for searching articles by newspaper."""
+        """
+        Args:
+        self: The instance of the class containing this method.
+
+        Returns:
+        None
+
+        Side Effects:
+        - Displays a text input field for the newspaper's name.
+        - If articles are found, displays a dataframe with the article titles and dates.
+        - If no articles are found, displays an error message.
+        - If an invalid newspaper name is entered, displays an error message.
+        """
         newspaper_name = st.text_input("Please enter a newspaper's name: ")
         articles_of_newspaper = self.search_np_articles(newspaper_name)
         if articles_of_newspaper is not None and len(articles_of_newspaper) != 0:
@@ -202,7 +212,19 @@ class SearchWizard:
             st.error("Invalid newspaper")
 
     def handle_search_date_articles(self):
-        """Handle the Streamlit UI for searching articles by date."""
+        """
+        Args:
+        self: The instance of the class containing this method.
+
+        Returns:
+            None
+
+        Side Effects:
+            - Displays a text input field for the date.
+            - If a valid date is entered and articles are found, displays a dataframe with the article titles and newspapers.
+            - If no articles are found, displays an error message.
+            - If an invalid date format is entered, displays an error message.
+        """
         date_str = st.text_input("Please enter a date (e.g. January 1, 2022): ")
         if len(date_str) != 0:
             p_date = parse_date(date_str)
@@ -218,7 +240,18 @@ class SearchWizard:
                 st.write("Invalid date format. Please enter a date in the format 'Month day, year'.")
 
     def handle_search_word_articles(self):
-        """Handle the Streamlit UI for searching articles by word."""
+        """
+        Args:
+        self: The instance of the class containing this method.
+
+        Returns:
+        None
+
+        Side Effects:
+            - Displays a text input field for the word.
+            - If articles containing the word are found, displays a dataframe with the article titles, newspapers, and dates.
+            - If no articles are found, displays an error message.
+        """
         word = st.text_input("Please enter a word: ")
         articles_of_word = self.search_articles_word(word)
         if articles_of_word is not None and len(articles_of_word) != 0:
