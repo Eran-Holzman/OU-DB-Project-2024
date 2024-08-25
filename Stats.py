@@ -1,7 +1,7 @@
-############################################################################################################
-#              This module is responsible for calculating db statistics                                    #
-#              The methods in this class implement the last requirements in the assignment                 #
-############################################################################################################
+"""
+This module is responsible for calculating db statistics
+The methods in this class implement the last requirements in the assignment
+"""
 from db_handler import *
 
 
