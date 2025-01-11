@@ -98,8 +98,8 @@ The user interface is built using Python's Streamlit library. It includes:
   - Display statistics for articles based on words and phrases.
     
   <div style="display: flex; gap: 10px;">
-    <img src="https://i.imgur.com/axd3qwF.png" alt="Statistics 1" height="200" style="margin-bottom: 10px;"/>
-    <img src="https://i.imgur.com/NJHscYY.png" alt="Statistics 2" height="200" style="margin-bottom: 10px;"/>
+    <img src="https://i.imgur.com/axd3qwF.png" alt="Statistics 1" height="250" width="300" style="margin-bottom: 10px;"/>
+    <img src="https://i.imgur.com/NJHscYY.png" alt="Statistics 2" height="250" width="300" style="margin-bottom: 10px;"/>
   </div>
 
 
