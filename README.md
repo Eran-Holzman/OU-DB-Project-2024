@@ -84,7 +84,14 @@ The user interface is built using Python's Streamlit library. It includes:
 - **Document Loading**: The program loads articles into the database, storing newspaper, article, and reporter data.
 - **Text Analysis Functions**:
   - Display all words in an article.
-    <img src="https://i.imgur.com/qUHYs8X.png" alt="Homepage" width="300" style="margin-bottom: 10px; padding-left: 10px;"/>
+    <img src="https://i.imgur.com/qUHYs8X.png" alt="Homepage" width="300"/>
+
+
+
+
+
+
+
 
   - Display context for a word (one line above and below the word in the article).
   - Search for a word's index.
@@ -92,7 +99,11 @@ The user interface is built using Python's Streamlit library. It includes:
   - Define custom word groups and phrases.
   - Display index for custom word groups or phrases.
   - Display statistics for articles based on words and phrases.
-
+    
+    <div style="display: flex; gap: 10px;">
+    <img src="https://i.imgur.com/axd3qwF.png" alt="Statistics 1" width="300" style="margin-bottom: 10px;"/>
+    <img src="https://i.imgur.com/NJHscYY.png" alt="Statistics 2" width="300" style="margin-bottom: 10px;"/>
+  </div>
 
 
 **Run the Script:**
