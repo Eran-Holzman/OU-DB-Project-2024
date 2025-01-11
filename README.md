@@ -86,6 +86,7 @@ The user interface is built using Python's Streamlit library. It includes:
   - Display all words in an article.
     <img src="https://i.imgur.com/qUHYs8X.png" alt="Homepage" width="300"/>
 
+
   - Display context for a word (one line above and below the word in the article).
   - Search for a word's index.
   - Identify words by their position.
