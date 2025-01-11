@@ -91,6 +91,11 @@ The user interface is built using Python's Streamlit library. It includes:
   - Display index for custom word groups or phrases.
   - Display statistics for articles based on words and phrases.
 
+**Run the Script:**
+   - Execute the script to run the site locally:
+     ```
+     python -m streamlit run main.py
+     ```
 
 
 ## **Contributors**
